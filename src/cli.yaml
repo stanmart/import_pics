@@ -1,0 +1,17 @@
+name: Photo Import
+version: "0.1"
+author: Martin Stancsics <martin.stancsics@gmail.com>
+about: Imports files from a folder and arranges them by date
+
+settings:
+  - ArgRequiredElseHelp
+
+args:
+  - FROM:
+      help: The folder from where files are imported
+      index: 1
+      required: true
+  - TO:
+      help: The folder where files will be exported
+      index: 2
+      required: true
