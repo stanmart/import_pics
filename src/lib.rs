@@ -45,49 +45,38 @@ impl AnalyzedFile {
 
 pub fn analyze_dir(
     dir: PathBuf,
-    extensions: Option<Vec<&str>>,
+    extensions: &Vec<&str>,
     recursive: bool,
 ) -> io::Result<Vec<AnalyzedFile>> {
-    let extensions = match extensions {
-        Some(ext) => ext,
-        None => vec!["jpg", "jpeg", "tif", "tiff", "raw", "arw", "mp4"],
-    };
-
     let entries = fs::read_dir(dir)?.filter_map(Result::ok);
 
     let mut files = Vec::new();
     let mut dirs = Vec::new();
 
     for entry in entries {
-        match entry.file_type() {
-            Ok(ft) => {
-                if ft.is_file() {
-                    files.push(entry) // What to do about symlinks?
-                } else if ft.is_dir() {
-                    dirs.push(entry)
-                }
+        if let Ok(ft) = entry.file_type() {
+            if ft.is_file() {
+                files.push(entry) // What to do about symlinks?
+            } else if ft.is_dir() {
+                dirs.push(entry)
             }
-            Err(_) => continue, // Should there be some message here?
         }
     }
 
     let mut analyzed_files: Vec<AnalyzedFile> = files
         .into_iter()
-        .filter(|f| match f.file_type() {
-            Ok(ft) => ft.is_file(), // TODO: what to do about symlinks?
-            Err(_) => false,
-        })
         .map(AnalyzedFile::from_direntry)
         .filter(|af| extensions.contains(&af.ext.as_str()))
         .collect();
 
     if recursive {
-        for analyzed_file in dirs.into_iter().flat_map(|dir| {
-            match analyze_dir(dir.path(), Some(extensions.clone()), recursive) {
-                Ok(sub_files) => sub_files,
-                Err(_) => vec![],
-            }
-        }) {
+        for analyzed_file in
+            dirs.into_iter()
+                .flat_map(|dir| match analyze_dir(dir.path(), extensions, recursive) {
+                    Ok(sub_files) => sub_files,
+                    Err(_) => vec![],
+                })
+        {
             analyzed_files.push(analyzed_file)
         }
     }

@@ -13,8 +13,9 @@ fn main() {
         .value_of("TO")
         .expect("Destination folder must be specified");
     let recursive = matches.is_present("recursive");
+    let extensions = vec!["jpg", "jpeg", "tif", "tiff", "raw", "arw", "mp4"];
 
     // DEBUG:
     let path = PathBuf::from(r"C:\Users\mstancs\Pictures\Screenshots");
-    println!("{:?}", analyze_dir(path, None, recursive).unwrap());
+    println!("{:?}", analyze_dir(path, &extensions, recursive).unwrap());
 }
