@@ -6,8 +6,8 @@ use chrono::{DateTime, Utc};
 #[derive(Debug)]
 pub struct AnalyzedFile {
     file: fs::DirEntry,
-    stem: Option<String>,
-    ext: Option<String>,
+    stem: String,
+    ext: String,
     raw_creation_time: Option<time::SystemTime>,
     creation_time: Option<DateTime<Utc>>,
     to_copy: Option<bool>,
@@ -19,10 +19,12 @@ impl AnalyzedFile {
         let path = file.path();
         let stem = path.file_stem()
             .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
+            .map(|s| s.to_string())
+            .unwrap_or("".to_string());
         let ext = path.extension()
             .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
+            .map(|s| s.to_string().to_lowercase())
+            .unwrap_or("".to_string());
 
         let raw_creation_time = file
             .metadata().ok()
@@ -41,7 +43,12 @@ impl AnalyzedFile {
     }
 }
 
-pub fn analyze_dir(dir: &str) -> io::Result<Vec<AnalyzedFile>> {
+pub fn analyze_dir(dir: &str, extensions: Option<Vec<&str>>) -> io::Result<Vec<AnalyzedFile>> {
+    let extensions = match extensions {
+        Some(ext) => ext,
+        None => vec!["jpg", "jpeg", "tif", "tiff", "raw", "arw"]
+    };
+
     let entries = fs::read_dir(dir)?;
     Ok(
         entries
@@ -51,6 +58,7 @@ pub fn analyze_dir(dir: &str) -> io::Result<Vec<AnalyzedFile>> {
                 Err(_) => false
             })
             .map(AnalyzedFile::from_direntry)
+            .filter(|af| extensions.contains(&af.ext.as_str()))
             .collect()
     )
 }

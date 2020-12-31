@@ -11,6 +11,6 @@ fn main() {
     // DEBUG:
     println!(
         "{:?}",
-        analyze_dir(r"C:\Users\mstancs\Pictures\Screenshots").unwrap()
+        analyze_dir(r"C:\Users\mstancs\Pictures\Screenshots", None).unwrap()
     );
 }
