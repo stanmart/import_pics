@@ -15,3 +15,9 @@ args:
       help: The folder where files will be exported
       index: 2
       required: true
+  - recursive:
+      help: Search the subfolders recursively
+      short: r
+      long: recursive
+      required: false
+      takes_value: false
