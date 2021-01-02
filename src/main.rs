@@ -42,17 +42,21 @@ fn main() {
         None => std::process::exit(0),
     };
     let grouped_files = group_files(files, &target_dir);
-    if !summarize_copy_plan(&grouped_files, copy_wo_prompt) {
-        std::process::exit(0)
-    }
-    let results = copy_files(grouped_files, &target_dir, None);
+    let results = match summarize_copy_plan(&grouped_files, copy_wo_prompt) {
+        None => std::process::exit(0),
+        Some(0) => {
+            println!("No new files to copy");
+            std::process::exit(0);
+        }
+        Some(num_files) => copy_files(grouped_files, &target_dir, Some(num_files)),
+    };
     summarize_results(&results);
 }
 
 fn summarize_copy_plan(
     file_map: &HashMap<String, Vec<ProcessedFile>>,
     copy_wo_prompt: bool,
-) -> bool {
+) -> Option<u64> {
     fn count_new_existing(files: &Vec<ProcessedFile>) -> (u64, u64) {
         let mut num_new = 0;
         let mut num_old = 0;
@@ -71,6 +75,8 @@ fn summarize_copy_plan(
         .collect();
     copy_summary.sort_by_key(|item| item.1);
 
+    let num_of_files = copy_summary.iter().map(|(_, (n, _))| n).sum();
+
     println!("{:<10} | {:>8} | {:>8}", "", "new", "existing");
     println!("-----------+----------+---------");
     for (subdir, (new, old)) in copy_summary {
@@ -78,14 +84,18 @@ fn summarize_copy_plan(
     }
     println!("");
 
+    if num_of_files == 0 {
+        return Some(0);
+    }
+
     if copy_wo_prompt {
-        true
+        Some(num_of_files)
     } else {
         let select_items = vec!["Copy new files", "Exit"];
         let selection = Select::new().default(0).items(&select_items).interact();
         match selection {
-            Ok(0) => true,
-            _ => false,
+            Ok(0) => Some(num_of_files),
+            _ => None,
         }
     }
 }
