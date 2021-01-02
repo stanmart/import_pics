@@ -1,5 +1,5 @@
 use clap::{load_yaml, App};
-use import_pics::analyze_dir;
+use import_pics::*;
 use std::path::PathBuf;
 
 fn main() {
@@ -17,5 +17,7 @@ fn main() {
 
     // DEBUG:
     let path = PathBuf::from(r"C:\Users\mstancs\Pictures\Screenshots");
-    println!("{:?}", analyze_dir(path, &extensions, recursive).unwrap());
+    let files = list_dir(path, recursive).unwrap();
+    let analyzed_files = analyze_files(files, &extensions);
+    println!("{:?}", analyzed_files);
 }

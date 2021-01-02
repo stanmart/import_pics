@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use fs::DirEntry;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -41,13 +42,16 @@ impl AnalyzedFile {
             to_copy: None,
         }
     }
+
+    pub fn dest_subdir_name(&self) -> String {
+        match self.creation_time {
+            Some(dt) => dt.format("%Y-%m-%d").to_string(),
+            None => "undated".to_string(),
+        }
+    }
 }
 
-pub fn analyze_dir(
-    dir: PathBuf,
-    extensions: &Vec<&str>,
-    recursive: bool,
-) -> io::Result<Vec<AnalyzedFile>> {
+pub fn list_dir(dir: PathBuf, recursive: bool) -> io::Result<Vec<DirEntry>> {
     let entries = fs::read_dir(dir)?.filter_map(Result::ok);
 
     let mut files = Vec::new();
@@ -56,30 +60,28 @@ pub fn analyze_dir(
     for entry in entries {
         if let Ok(ft) = entry.file_type() {
             if ft.is_file() {
-                files.push(entry) // What to do about symlinks?
+                files.push(entry)
             } else if ft.is_dir() {
                 dirs.push(entry)
             }
         }
     }
 
-    let mut analyzed_files: Vec<AnalyzedFile> = files
-        .into_iter()
-        .map(AnalyzedFile::from_direntry)
-        .filter(|af| extensions.contains(&af.ext.as_str()))
-        .collect();
-
     if recursive {
-        for analyzed_file in
-            dirs.into_iter()
-                .flat_map(|dir| match analyze_dir(dir.path(), extensions, recursive) {
-                    Ok(sub_files) => sub_files,
-                    Err(_) => vec![],
-                })
-        {
-            analyzed_files.push(analyzed_file)
+        for dir in dirs {
+            if let Ok(mut new_files) = list_dir(dir.path(), recursive) {
+                files.append(&mut new_files);
+            }
         }
     }
 
-    Ok(analyzed_files)
+    Ok(files)
+}
+
+pub fn analyze_files(files: Vec<DirEntry>, extensions: &Vec<&str>) -> Vec<AnalyzedFile> {
+    files
+        .into_iter()
+        .map(AnalyzedFile::from_direntry)
+        .filter(|af| extensions.contains(&af.ext.as_str()))
+        .collect()
 }
