@@ -64,11 +64,26 @@ fn main() {
         None => std::process::exit(0),
         Some(0) => {
             println!("No new files to copy");
+            if !copy_wo_prompt {
+                Select::new()
+                    .item("Press enter to exit")
+                    .default(0)
+                    .interact()
+                    .unwrap();
+            }
             std::process::exit(0);
         }
         Some(num_files) => copy_files(grouped_files, &target_dir, Some(num_files)),
     };
     summarize_results(&results);
+    if !copy_wo_prompt {
+        Select::new()
+            .item("Press enter to exit")
+            .default(0)
+            .interact()
+            .unwrap();
+    }
+    std::process::exit(0);
 }
 
 fn summarize_copy_plan(
