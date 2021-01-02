@@ -1,25 +1,23 @@
 use chrono::{DateTime, Utc};
 use fs::DirEntry;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
 use std::time;
+use std::{collections::HashMap, fs};
+use std::{io, path::Path};
 
 #[derive(Debug)]
-pub struct AnalyzedFile {
+pub struct FileWithMetadata {
     file: fs::DirEntry,
-    stem: String,
+    name: String,
     ext: String,
     raw_creation_time: Option<time::SystemTime>,
     creation_time: Option<DateTime<Utc>>,
-    to_copy: Option<bool>,
 }
 
-impl AnalyzedFile {
+impl FileWithMetadata {
     pub fn from_direntry(file: fs::DirEntry) -> Self {
         let path = file.path();
-        let stem = path
-            .file_stem()
+        let name = path
+            .file_name()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string())
             .unwrap_or("".to_string());
@@ -33,13 +31,12 @@ impl AnalyzedFile {
         let creation_time: Option<DateTime<Utc>> = raw_creation_time // TODO: time zones?
             .map(|ct| DateTime::from(ct));
 
-        AnalyzedFile {
+        FileWithMetadata {
             file,
-            stem,
+            name,
             ext,
             raw_creation_time,
             creation_time,
-            to_copy: None,
         }
     }
 
@@ -51,7 +48,23 @@ impl AnalyzedFile {
     }
 }
 
-pub fn list_dir(dir: PathBuf, recursive: bool) -> io::Result<Vec<DirEntry>> {
+#[derive(Debug)]
+pub enum ProcessedFile {
+    New(FileWithMetadata),
+    Existing(FileWithMetadata),
+}
+
+impl ProcessedFile {
+    pub fn from_file(file: FileWithMetadata, target_dir: &Path) -> Self {
+        let path = target_dir.join(file.dest_subdir_name()).join(&file.name);
+        match path.exists() {
+            true => ProcessedFile::Existing(file),
+            false => ProcessedFile::New(file),
+        }
+    }
+}
+
+fn list_dir(dir: &Path, recursive: bool) -> io::Result<Vec<DirEntry>> {
     let entries = fs::read_dir(dir)?.filter_map(Result::ok);
 
     let mut files = Vec::new();
@@ -69,7 +82,7 @@ pub fn list_dir(dir: PathBuf, recursive: bool) -> io::Result<Vec<DirEntry>> {
 
     if recursive {
         for dir in dirs {
-            if let Ok(mut new_files) = list_dir(dir.path(), recursive) {
+            if let Ok(mut new_files) = list_dir(&dir.path(), recursive) {
                 files.append(&mut new_files);
             }
         }
@@ -78,10 +91,35 @@ pub fn list_dir(dir: PathBuf, recursive: bool) -> io::Result<Vec<DirEntry>> {
     Ok(files)
 }
 
-pub fn analyze_files(files: Vec<DirEntry>, extensions: &Vec<&str>) -> Vec<AnalyzedFile> {
-    files
+pub fn analyze_source_dir(
+    dir: &Path,
+    recursive: bool,
+    extensions: &Vec<&str>,
+) -> io::Result<Vec<FileWithMetadata>> {
+    let files = list_dir(dir, recursive)?
         .into_iter()
-        .map(AnalyzedFile::from_direntry)
-        .filter(|af| extensions.contains(&af.ext.as_str()))
-        .collect()
+        .map(FileWithMetadata::from_direntry)
+        .filter(|f| extensions.contains(&f.ext.as_str()))
+        .collect();
+    Ok(files)
+}
+
+pub fn group_files(
+    files: Vec<FileWithMetadata>,
+    target_dir: &Path,
+) -> HashMap<String, Vec<ProcessedFile>> {
+    let mut file_map: HashMap<String, Vec<ProcessedFile>> = HashMap::new();
+    for file in files {
+        let subfolder_name = file.dest_subdir_name();
+        let processed_file = ProcessedFile::from_file(file, target_dir);
+        match file_map.get_mut(&subfolder_name) {
+            Some(file_vec) => file_vec.push(processed_file),
+            None => {
+                let new_file_vec = vec![processed_file];
+                file_map.insert(subfolder_name, new_file_vec);
+            }
+        };
+    }
+
+    file_map
 }
