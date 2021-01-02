@@ -21,3 +21,16 @@ args:
       long: recursive
       required: false
       takes_value: false
+  - extensions:
+      help: "Filter results to these extensions (default: jpg, jpeg, tif, tiff, raw, arw, mp4)"
+      short: e
+      long: extensions
+      required: false
+      min_values: 1
+      use_delimiter: true
+  - yes:
+      help: Do not prompt for copy
+      short: y
+      long: yes
+      required: false
+      takes_value: false

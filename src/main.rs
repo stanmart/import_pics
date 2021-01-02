@@ -17,7 +17,15 @@ fn main() {
         .value_of("TO")
         .expect("Destination folder must be specified");
     let recursive = matches.is_present("recursive");
-    let extensions = vec!["jpg", "jpeg", "tif", "tiff", "raw", "arw", "mp4"];
+    let copy_wo_prompt = matches.is_present("yes");
+    let extensions = match matches.values_of("extensions") {
+        Some(ext) => ext.collect(),
+        None => vec!["jpg", "jpeg", "tif", "tiff", "raw", "arw", "mp4"],
+    };
+    if extensions.len() == 0 {
+        println!("At least one extension must be supplied");
+        std::process::exit(1);
+    }
 
     let source_dir = match validate_source_dir(from) {
         Some(path) => path,
@@ -34,14 +42,17 @@ fn main() {
         None => std::process::exit(0),
     };
     let grouped_files = group_files(files, &target_dir);
-    if !prompt_for_copy(&grouped_files) {
+    if !summarize_copy_plan(&grouped_files, copy_wo_prompt) {
         std::process::exit(0)
     }
     let results = copy_files(grouped_files, &target_dir, None);
     summarize_results(&results);
 }
 
-fn prompt_for_copy(file_map: &HashMap<String, Vec<ProcessedFile>>) -> bool {
+fn summarize_copy_plan(
+    file_map: &HashMap<String, Vec<ProcessedFile>>,
+    copy_wo_prompt: bool,
+) -> bool {
     fn count_new_existing(files: &Vec<ProcessedFile>) -> (u64, u64) {
         let mut num_new = 0;
         let mut num_old = 0;
@@ -67,11 +78,15 @@ fn prompt_for_copy(file_map: &HashMap<String, Vec<ProcessedFile>>) -> bool {
     }
     println!("");
 
-    let select_items = vec!["Copy new files", "Exit"];
-    let selection = Select::new().default(0).items(&select_items).interact();
-    match selection {
-        Ok(0) => true,
-        _ => false,
+    if copy_wo_prompt {
+        true
+    } else {
+        let select_items = vec!["Copy new files", "Exit"];
+        let selection = Select::new().default(0).items(&select_items).interact();
+        match selection {
+            Ok(0) => true,
+            _ => false,
+        }
     }
 }
 
@@ -85,7 +100,7 @@ fn summarize_results(results: &Vec<Result<u64, CopyError>>) {
         }
     }
 
-    println!("Succesfully copied {} files", success.len());
+    println!("Succesfully copied {} file(s)", success.len());
     if failure.len() > 0 {
         println!("The following problems occured:");
         for err in failure {
