@@ -3,7 +3,15 @@ use fs::DirEntry;
 use indicatif::ProgressBar;
 use std::time;
 use std::{collections::HashMap, fs};
-use std::{io, path::Path};
+use std::{io, path::Path, path::PathBuf};
+use custom_error::custom_error;
+
+custom_error! {pub CopyError
+    Io {
+        source: io::Error,
+        path: PathBuf
+    } = @{format!("{path}: {source}", source=source, path=path.display())},
+}
 
 #[derive(Debug)]
 pub struct FileWithMetadata {
@@ -97,11 +105,16 @@ pub fn analyze_source_dir(
     recursive: bool,
     extensions: &Vec<&str>,
 ) -> io::Result<Vec<FileWithMetadata>> {
-    let files = list_dir(dir, recursive)?
+    let pb = ProgressBar::new_spinner();
+    pb.set_message("Analyzing source directory");
+    pb.enable_steady_tick(50);
+    let files: Vec<FileWithMetadata> = list_dir(dir, recursive)?
         .into_iter()
         .map(FileWithMetadata::from_direntry)
         .filter(|f| extensions.contains(&f.ext.as_str()))
         .collect();
+    let end_message = format!("Found {} files", files.len());
+    pb.finish_with_message(&end_message);
     Ok(files)
 }
 
@@ -113,13 +126,8 @@ pub fn group_files(
     for file in files {
         let subfolder_name = file.dest_subdir_name();
         let processed_file = ProcessedFile::from_file(file, target_dir);
-        match file_map.get_mut(&subfolder_name) {
-            Some(file_vec) => file_vec.push(processed_file),
-            None => {
-                let new_file_vec = vec![processed_file];
-                file_map.insert(subfolder_name, new_file_vec);
-            }
-        };
+        let file_vec = file_map.entry(subfolder_name).or_insert_with(|| vec![]);
+        file_vec.push(processed_file);
     }
 
     file_map
@@ -129,7 +137,7 @@ pub fn copy_files(
     grouped_files: HashMap<String, Vec<ProcessedFile>>,
     target_dir: &Path,
     num_new_files: Option<u64>,
-) -> Vec<io::Result<u64>> {
+) -> Vec<Result<u64, CopyError>> {
     let pb = match num_new_files {
         Some(num) => ProgressBar::new(num),
         None => ProgressBar::new_spinner(),
@@ -139,12 +147,34 @@ pub fn copy_files(
     let mut copy_results = Vec::new();
     for (subdir, files) in grouped_files {
         let subdir_path = target_dir.join(&subdir);
+        let skip = if subdir_path.is_dir() {
+            false
+        } else {
+            match fs::create_dir(&subdir_path) {
+                Ok(_) => false,
+                Err(e) => {
+                    pb.println(format!("Could not create directory {}", &subdir));
+                    copy_results.push(Err(CopyError::Io {
+                        source: e,
+                        path: subdir_path.to_owned()
+                    }));
+                    true
+                }
+            }
+        };
         for processed_file in files {
             if let ProcessedFile::New(file) = processed_file {
-                let target_path = subdir_path.join(file.name);
-                copy_results.push(fs::copy(&file.file.path(), &target_path));
+                if !skip {
+                    let target_path = subdir_path.join(file.name);
+                    match fs::copy(&file.file.path(), &target_path) {
+                        Ok(size) => copy_results.push(Ok(size)),
+                        Err(e) => copy_results.push(Err(CopyError::Io {
+                            source: e,
+                            path: subdir_path.to_owned()
+                        }))
+                    };
+                }
                 pb.inc(1);
-                std::thread::sleep(std::time::Duration::from_secs(1))
             }
         }
     }

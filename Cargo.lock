@@ -99,6 +99,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom_error"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51ac5e99a7fea3ee8a03fa4721a47e2efd3fbb38358fc61192a54d4c6f866c12"
+
+[[package]]
 name = "dialoguer"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -142,6 +148,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
+ "custom_error",
  "dialoguer",
  "indicatif",
 ]
