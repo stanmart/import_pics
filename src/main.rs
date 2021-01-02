@@ -1,7 +1,10 @@
 use clap::{load_yaml, App};
 use dialoguer::Select;
 use import_pics::*;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 fn main() {
     let yaml = load_yaml!("cli.yaml");
@@ -26,8 +29,10 @@ fn main() {
         None => std::process::exit(0),
     };
 
-    // DEBUG:
-    let files = analyze_source_dir(&source_dir, recursive, &extensions).unwrap();
+    let files = match try_analyze_source_dir(&source_dir, recursive, &extensions) {
+        Some(f) => f,
+        None => std::process::exit(0),
+    };
     let grouped_files = group_files(files, &target_dir);
     if !prompt_for_copy(&grouped_files) {
         std::process::exit(0)
@@ -128,4 +133,24 @@ fn validate_target_dir(to: &str) -> Option<PathBuf> {
         }
     }
     Some(target_dir)
+}
+
+fn try_analyze_source_dir(
+    dir: &Path,
+    recursive: bool,
+    extensions: &Vec<&str>,
+) -> Option<Vec<FileWithMetadata>> {
+    let select_items = vec!["Exit", "Retry"];
+    loop {
+        match analyze_source_dir(dir, recursive, &extensions) {
+            Ok(files) => return Some(files),
+            Err(e) => {
+                println!("Could not analyze source directory: {}", e);
+                match Select::new().items(&select_items).default(0).interact() {
+                    Ok(1) => continue,
+                    _ => return None,
+                }
+            }
+        }
+    }
 }
