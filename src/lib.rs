@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use custom_error::custom_error;
 use fs::DirEntry;
 use indicatif::ProgressBar;
+use regex::Regex;
 use std::time;
 use std::{collections::HashMap, fs};
 use std::{io, path::Path, path::PathBuf};
@@ -73,7 +74,13 @@ impl ProcessedFile {
     }
 }
 
-fn list_dir(dir: &Path, recursive: bool) -> io::Result<Vec<DirEntry>> {
+fn list_dir(
+    dir: &Path,
+    recursive: bool,
+    extensions: &Vec<&str>,
+    filter_re: &Option<Regex>,
+    skip_re: &Option<Regex>,
+) -> io::Result<Vec<DirEntry>> {
     let entries = fs::read_dir(dir)?.filter_map(Result::ok);
 
     let mut files = Vec::new();
@@ -82,7 +89,27 @@ fn list_dir(dir: &Path, recursive: bool) -> io::Result<Vec<DirEntry>> {
     for entry in entries {
         if let Ok(ft) = entry.file_type() {
             if ft.is_file() {
-                files.push(entry)
+                let ext = entry
+                    .path()
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string().to_lowercase())
+                    .unwrap_or("".to_string());
+                let name = entry.file_name().to_str().unwrap_or("").to_string();
+
+                let extension_ok = extensions.contains(&ext.as_str());
+                let filter_ok = match filter_re {
+                    None => true,
+                    Some(re) => re.is_match(&name),
+                };
+                let skip_ok = match skip_re {
+                    None => true,
+                    Some(re) => !re.is_match(&name),
+                };
+
+                if extension_ok && filter_ok && skip_ok {
+                    files.push(entry)
+                }
             } else if ft.is_dir() {
                 dirs.push(entry)
             }
@@ -91,7 +118,9 @@ fn list_dir(dir: &Path, recursive: bool) -> io::Result<Vec<DirEntry>> {
 
     if recursive {
         for dir in dirs {
-            if let Ok(mut new_files) = list_dir(&dir.path(), recursive) {
+            if let Ok(mut new_files) =
+                list_dir(&dir.path(), recursive, extensions, filter_re, skip_re)
+            {
                 files.append(&mut new_files);
             }
         }
@@ -104,14 +133,15 @@ pub fn analyze_source_dir(
     dir: &Path,
     recursive: bool,
     extensions: &Vec<&str>,
+    filter_re: &Option<Regex>,
+    skip_re: &Option<Regex>,
 ) -> io::Result<Vec<FileWithMetadata>> {
     let pb = ProgressBar::new_spinner();
     pb.set_message("Analyzing source directory");
     pb.enable_steady_tick(50);
-    let files: Vec<FileWithMetadata> = list_dir(dir, recursive)?
+    let files: Vec<FileWithMetadata> = list_dir(dir, recursive, extensions, filter_re, skip_re)?
         .into_iter()
         .map(FileWithMetadata::from_direntry)
-        .filter(|f| extensions.contains(&f.ext.as_str()))
         .collect();
     let end_message = format!("Found {} files", files.len());
     pb.finish_with_message(&end_message);

@@ -12,3 +12,4 @@ dialoguer = "0.7"
 clap = { version = "2", features = ["yaml"] }
 chrono = "0.4"
 custom_error = "1.8"
+regex = "1.4"

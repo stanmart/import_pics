@@ -1,6 +1,7 @@
 use clap::{load_yaml, App};
 use dialoguer::Select;
 use import_pics::*;
+use regex::Regex;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -26,6 +27,22 @@ fn main() {
         println!("At least one extension must be supplied");
         std::process::exit(1);
     }
+    let filter_re = match matches.value_of("filter").map(Regex::new) {
+        None => None,
+        Some(Ok(re)) => Some(re),
+        Some(Err(e)) => {
+            println!("Could not parse regular expression: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let skip_re = match matches.value_of("skip").map(Regex::new) {
+        None => None,
+        Some(Ok(re)) => Some(re),
+        Some(Err(e)) => {
+            println!("Could not parse regular expression: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     let source_dir = match validate_source_dir(from) {
         Some(path) => path,
@@ -37,10 +54,11 @@ fn main() {
         None => std::process::exit(0),
     };
 
-    let files = match try_analyze_source_dir(&source_dir, recursive, &extensions) {
-        Some(f) => f,
-        None => std::process::exit(0),
-    };
+    let files =
+        match try_analyze_source_dir(&source_dir, recursive, &extensions, &filter_re, &skip_re) {
+            Some(f) => f,
+            None => std::process::exit(0),
+        };
     let grouped_files = group_files(files, &target_dir);
     let results = match summarize_copy_plan(&grouped_files, copy_wo_prompt) {
         None => std::process::exit(0),
@@ -164,10 +182,12 @@ fn try_analyze_source_dir(
     dir: &Path,
     recursive: bool,
     extensions: &Vec<&str>,
+    filter_re: &Option<Regex>,
+    skip_re: &Option<Regex>,
 ) -> Option<Vec<FileWithMetadata>> {
     let select_items = vec!["Exit", "Retry"];
     loop {
-        match analyze_source_dir(dir, recursive, &extensions) {
+        match analyze_source_dir(dir, recursive, &extensions, filter_re, skip_re) {
             Ok(files) => return Some(files),
             Err(e) => {
                 println!("Could not analyze source directory: {}", e);
