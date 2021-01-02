@@ -21,5 +21,5 @@ fn main() {
     let files = analyze_source_dir(&source_dir, recursive, &extensions).unwrap();
     let grouped_files = group_files(files, &target_dir);
     println!("{:?}", grouped_files);
-    println!("{:?}", copy_files(grouped_files, &target_dir));
+    println!("{:?}", copy_files(grouped_files, &target_dir, None));
 }

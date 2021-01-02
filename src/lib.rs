@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use fs::DirEntry;
+use indicatif::ProgressBar;
 use std::time;
 use std::{collections::HashMap, fs};
 use std::{io, path::Path};
@@ -127,7 +128,14 @@ pub fn group_files(
 pub fn copy_files(
     grouped_files: HashMap<String, Vec<ProcessedFile>>,
     target_dir: &Path,
+    num_new_files: Option<u64>,
 ) -> Vec<io::Result<u64>> {
+    let pb = match num_new_files {
+        Some(num) => ProgressBar::new(num),
+        None => ProgressBar::new_spinner(),
+    };
+    pb.set_message("Copying files");
+
     let mut copy_results = Vec::new();
     for (subdir, files) in grouped_files {
         let subdir_path = target_dir.join(&subdir);
@@ -135,8 +143,11 @@ pub fn copy_files(
             if let ProcessedFile::New(file) = processed_file {
                 let target_path = subdir_path.join(file.name);
                 copy_results.push(fs::copy(&file.file.path(), &target_path));
+                pb.inc(1);
+                std::thread::sleep(std::time::Duration::from_secs(1))
             }
         }
     }
+    pb.finish_with_message("Finished");
     copy_results
 }
