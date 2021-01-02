@@ -123,3 +123,20 @@ pub fn group_files(
 
     file_map
 }
+
+pub fn copy_files(
+    grouped_files: HashMap<String, Vec<ProcessedFile>>,
+    target_dir: &Path,
+) -> Vec<io::Result<u64>> {
+    let mut copy_results = Vec::new();
+    for (subdir, files) in grouped_files {
+        let subdir_path = target_dir.join(&subdir);
+        for processed_file in files {
+            if let ProcessedFile::New(file) = processed_file {
+                let target_path = subdir_path.join(file.name);
+                copy_results.push(fs::copy(&file.file.path(), &target_path));
+            }
+        }
+    }
+    copy_results
+}
