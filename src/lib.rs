@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
+use custom_error::custom_error;
 use fs::DirEntry;
 use indicatif::ProgressBar;
 use std::time;
 use std::{collections::HashMap, fs};
 use std::{io, path::Path, path::PathBuf};
-use custom_error::custom_error;
 
 custom_error! {pub CopyError
     Io {
@@ -156,7 +156,7 @@ pub fn copy_files(
                     pb.println(format!("Could not create directory {}", &subdir));
                     copy_results.push(Err(CopyError::Io {
                         source: e,
-                        path: subdir_path.to_owned()
+                        path: subdir_path.to_owned(),
                     }));
                     true
                 }
@@ -170,8 +170,8 @@ pub fn copy_files(
                         Ok(size) => copy_results.push(Ok(size)),
                         Err(e) => copy_results.push(Err(CopyError::Io {
                             source: e,
-                            path: subdir_path.to_owned()
-                        }))
+                            path: subdir_path.to_owned(),
+                        })),
                     };
                 }
                 pb.inc(1);

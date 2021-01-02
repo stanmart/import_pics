@@ -1,7 +1,6 @@
 use clap::{load_yaml, App};
-use dialoguer::Confirm;
+use dialoguer::Select;
 use import_pics::*;
-use std::io;
 use std::{collections::HashMap, path::PathBuf};
 
 fn main() {
@@ -17,23 +16,27 @@ fn main() {
     let recursive = matches.is_present("recursive");
     let extensions = vec!["jpg", "jpeg", "tif", "tiff", "raw", "arw", "mp4"];
 
+    let source_dir = match validate_source_dir(from) {
+        Some(path) => path,
+        None => std::process::exit(0),
+    };
+
+    let target_dir = match validate_target_dir(to) {
+        Some(path) => path,
+        None => std::process::exit(0),
+    };
+
     // DEBUG:
-    let source_dir = PathBuf::from(from);
-    let target_dir = PathBuf::from(to);
     let files = analyze_source_dir(&source_dir, recursive, &extensions).unwrap();
     let grouped_files = group_files(files, &target_dir);
-    match prompt_for_copy(&grouped_files) {
-        Ok(true) => (),
-        _ => {
-            println!("Exiting");
-            std::process::exit(0)
-        }
-    };
+    if !prompt_for_copy(&grouped_files) {
+        std::process::exit(0)
+    }
     let results = copy_files(grouped_files, &target_dir, None);
     summarize_results(&results);
 }
 
-fn prompt_for_copy(file_map: &HashMap<String, Vec<ProcessedFile>>) -> io::Result<bool> {
+fn prompt_for_copy(file_map: &HashMap<String, Vec<ProcessedFile>>) -> bool {
     fn count_new_existing(files: &Vec<ProcessedFile>) -> (u64, u64) {
         let mut num_new = 0;
         let mut num_old = 0;
@@ -59,10 +62,12 @@ fn prompt_for_copy(file_map: &HashMap<String, Vec<ProcessedFile>>) -> io::Result
     }
     println!("");
 
-    Confirm::new()
-        .with_prompt("Do you want to continue?")
-        .default(true)
-        .interact()
+    let select_items = vec!["Copy new files", "Exit"];
+    let selection = Select::new().default(0).items(&select_items).interact();
+    match selection {
+        Ok(0) => true,
+        _ => false,
+    }
 }
 
 fn summarize_results(results: &Vec<Result<u64, CopyError>>) {
@@ -71,7 +76,7 @@ fn summarize_results(results: &Vec<Result<u64, CopyError>>) {
     for res in results {
         match res {
             Ok(size) => success.push(size),
-            Err(e) => failure.push(e)
+            Err(e) => failure.push(e),
         }
     }
 
@@ -82,4 +87,45 @@ fn summarize_results(results: &Vec<Result<u64, CopyError>>) {
             println!("{}", err);
         }
     }
+}
+
+fn validate_source_dir(from: &str) -> Option<PathBuf> {
+    let source_dir = PathBuf::from(from);
+    let select_items = vec!["Exit", "Retry"];
+    while !source_dir.is_dir() {
+        match Select::new()
+            .with_prompt("The source directory is not readable / not a directory")
+            .items(&select_items)
+            .default(0)
+            .interact()
+        {
+            Ok(1) => continue,
+            _ => return None,
+        }
+    }
+    Some(source_dir)
+}
+
+fn validate_target_dir(to: &str) -> Option<PathBuf> {
+    let target_dir = PathBuf::from(to);
+    let select_items = vec!["Exit", "Create", "Retry"];
+    while !target_dir.is_dir() {
+        match Select::new()
+            .with_prompt("The target is not an existing directory")
+            .items(&select_items)
+            .default(0)
+            .interact()
+        {
+            Ok(1) => match std::fs::create_dir_all(&target_dir) {
+                Ok(_) => {
+                    println!("Succesfully created directory");
+                    continue;
+                }
+                Err(e) => println!("Could not create directory: {}", e),
+            },
+            Ok(2) => continue,
+            _ => return None,
+        }
+    }
+    Some(target_dir)
 }
