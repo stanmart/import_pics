@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use custom_error::custom_error;
 use fs::DirEntry;
 use indicatif::ProgressBar;
@@ -19,7 +19,7 @@ pub struct FileWithMetadata {
     name: String,
     ext: String,
     raw_creation_time: Option<time::SystemTime>,
-    creation_time: Option<DateTime<Utc>>,
+    creation_time: Option<DateTime<Local>>,
 }
 
 impl FileWithMetadata {
@@ -37,7 +37,7 @@ impl FileWithMetadata {
             .unwrap_or("".to_string());
 
         let raw_creation_time = file.metadata().ok().and_then(|md| md.created().ok());
-        let creation_time: Option<DateTime<Utc>> = raw_creation_time // TODO: time zones?
+        let creation_time: Option<DateTime<Local>> = raw_creation_time // TODO: time zones?
             .map(|ct| DateTime::from(ct));
 
         FileWithMetadata {
